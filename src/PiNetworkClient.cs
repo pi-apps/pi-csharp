@@ -12,11 +12,11 @@ namespace PiNetworkNet
     public class PiNetworkClient
     {
         private readonly RestClient _restClient = new RestClient("https://api.minepi.com/v2");
-        private string _apiKey;
+        private readonly string _apiKey;
         public PiNetworkClient(string apiKey)
         {
             _restClient.AddDefaultHeader("Content-Type", "application/json");
-            //_restClient.AddDefaultHeader("Accept", "application/json");
+            _restClient.AddDefaultHeader("Accept", "application/json");
             _apiKey = apiKey;
         }
 
@@ -25,8 +25,73 @@ namespace PiNetworkNet
             var request = new RestRequest("/me");
             request.AddHeader("Accept", $"application/json");
             request.AddHeader("Authorization", $"Bearer {accessToken}");
-            var user = await _restClient.GetAsync<PiAuthDto>(request);
-            return user;
+            request.Method = Method.Get;
+            var response = await _restClient.ExecuteAsync(request);
+            if (response.IsSuccessful)
+            {
+                return JsonConvert.DeserializeObject<PiAuthDto>(response.Content);                
+            }
+            else
+            {
+                try
+                {
+                    PiNetworkError error = JsonConvert.DeserializeObject<PiNetworkError>(response.Content);
+                    if (error != null)
+                    {
+                        throw new PiNetworkException()
+                        {
+                            PiError = error,
+                        };
+                    }
+                    else
+                    {
+                        throw new Exception($"{response.Content}");
+                    }
+                }
+                catch
+                {
+                    throw;
+                }
+            }
+        }
+
+        public async Task<PaymentDto> Get(string identifier)
+        {
+            try
+            {
+                var request = new RestRequest($"/payments/{identifier}");
+                request.AddHeader("Authorization", $"Key {_apiKey}");
+                request.AddHeader("Accept", $"application/json");
+                request.Method = Method.Get;
+                var response = await _restClient.ExecuteAsync(request);
+                if (response.IsSuccessful)
+                {
+                    return JsonConvert.DeserializeObject<PaymentDto>(response.Content);
+                }
+                else
+                {
+                    try
+                    {
+                        PiNetworkError error = JsonConvert.DeserializeObject<PiNetworkError>(response.Content);
+                        if (error != null)
+                        {
+                            throw new PiNetworkException()
+                            {
+                                PiError = error,
+                            };
+                        }
+                        else
+                        {
+                            throw new Exception($"{response.Content}");
+                        }
+                    }
+                    catch
+                    {
+                        throw;
+                    }
+                }
+            }
+            catch { throw; }
         }
 
         public async Task<List<PaymentDto>> GetIncompleteServerPayments()
@@ -36,13 +101,40 @@ namespace PiNetworkNet
                 var request = new RestRequest("/payments/incomplete_server_payments");
                 request.AddHeader("Accept", $"application/json");
                 request.AddHeader("Authorization", $"Key {_apiKey}");
-                var payments = await _restClient.GetAsync<IncompleteServerPayments>(request);
-                if (payments.IncompletePayments != null && payments.IncompletePayments.Count > 0)
-                    return payments.IncompletePayments;
+                request.Method = Method.Get;
+                var response = await _restClient.ExecuteAsync(request);
+                if (response.IsSuccessful)
+                {
+                    var payments = JsonConvert.DeserializeObject<IncompleteServerPayments>(response.Content);
+                    if (payments !=  null && payments.IncompletePayments != null && payments.IncompletePayments.Count > 0)
+                        return payments.IncompletePayments;
+                }
+                else
+                {
+                    try
+                    {
+                        PiNetworkError error = JsonConvert.DeserializeObject<PiNetworkError>(response.Content);
+                        if (error != null)
+                        {
+                            throw new PiNetworkException()
+                            {
+                                PiError = error,
+                            };
+                        }
+                        else
+                        {
+                            throw new Exception($"{response.Content}");
+                        }
+                    }
+                    catch
+                    {
+                        throw;
+                    }
+                }
             }
-            catch (Exception e)
+            catch
             {
-                var str = e.Message;
+                throw;
             }
             return null;
         }
@@ -54,13 +146,15 @@ namespace PiNetworkNet
                 var request = new RestRequest($"/payments");
                 request.AddHeader("Authorization", $"Key {_apiKey}");
                 request.AddHeader("Accept", $"application/json");
-                var str = JsonConvert.SerializeObject(dto);
                 request.AddJsonBody(JsonConvert.SerializeObject(dto));
-                var response = _restClient.ExecutePost(request);
+                request.Method = Method.Post;
+                var response = await _restClient.ExecuteAsync(request);
                 if (response.IsSuccessful)
                 {
                     var payment = JsonConvert.DeserializeObject<PaymentDto>(response.Content);
-                    if (string.IsNullOrEmpty(payment.ToAddress))
+                    if (payment != null 
+                        && string.IsNullOrEmpty(payment.ToAddress) 
+                        && !string.IsNullOrEmpty(payment.Identifier))
                     {
                         return await Get(payment.Identifier);
                     }
@@ -89,23 +183,10 @@ namespace PiNetworkNet
                     }
                 }
             }
-            catch (Exception e)
+            catch
             {
                 throw;
             }
-        }
-
-        public async Task<PaymentDto> Get(string identifier)
-        {
-            try
-            {
-                var request = new RestRequest($"/payments/{identifier}");
-                request.AddHeader("Authorization", $"Key {_apiKey}");
-                request.AddHeader("Accept", $"application/json");
-                var payment = await _restClient.GetAsync<PaymentDto>(request);
-                return payment;
-            }
-            catch { return null; }
         }
 
         public async Task<PaymentDto> Approve(string identifier)
@@ -113,26 +194,38 @@ namespace PiNetworkNet
             try
             {
                 var request = new RestRequest($"/payments/{identifier}/approve");
-                request.AddHeader("Authorization", $"Key {_apiKey}");
-                var payment = await _restClient.PostAsync<PaymentDto>(request);
-                return payment;
-            }
-            catch { return null; }
-        }
-
-        public async Task<PaymentDto> Complete(string identifier, string tx)
-        {
-            try
-            {
-                var request = new RestRequest($"/payments/{identifier}/complete");
                 request.AddHeader("Accept", $"application/json");
                 request.AddHeader("Authorization", $"Key {_apiKey}");
-                var txid = new Tx() { TxId = tx };
-                request.AddJsonBody(JsonConvert.SerializeObject(txid));
-                var payment = await _restClient.PostAsync<PaymentDto>(request);
-                return payment;
+                request.Method = Method.Post;
+                var response = await _restClient.ExecuteAsync(request);
+                if (response.IsSuccessful)
+                {
+                    return JsonConvert.DeserializeObject<PaymentDto>(response.Content);
+                }
+                else
+                {
+                    try
+                    {
+                        PiNetworkError error = JsonConvert.DeserializeObject<PiNetworkError>(response.Content);
+                        if (error != null)
+                        {
+                            throw new PiNetworkException()
+                            {
+                                PiError = error,
+                            };
+                        }
+                        else
+                        {
+                            throw new Exception($"{response.Content}");
+                        }
+                    }
+                    catch
+                    {
+                        throw;
+                    }
+                }
             }
-            catch { return null; }
+            catch { throw; }
         }
 
         public async Task<PaymentDto> Cancel(string identifier)
@@ -142,11 +235,75 @@ namespace PiNetworkNet
                 var request = new RestRequest($"/payments/{identifier}/cancel");
                 request.AddHeader("Accept", $"application/json");
                 request.AddHeader("Authorization", $"Key {_apiKey}");
-                var payment = await _restClient.PostAsync<PaymentDto>(request);
-                return payment;
+                request.Method = Method.Post;
+                var response = await _restClient.ExecuteAsync(request);
+                if (response.IsSuccessful)
+                {
+                    return JsonConvert.DeserializeObject<PaymentDto>(response.Content);
+                }
+                else
+                {
+                    try
+                    {
+                        PiNetworkError error = JsonConvert.DeserializeObject<PiNetworkError>(response.Content);
+                        if (error != null)
+                        {
+                            throw new PiNetworkException()
+                            {
+                                PiError = error,
+                            };
+                        }
+                        else
+                        {
+                            throw new Exception($"{response.Content}");
+                        }
+                    }
+                    catch
+                    {
+                        throw;
+                    }
+                }
             }
-            catch { return null; }
+            catch { throw; }
         }
+
+        public async Task<PaymentDto> Complete(string identifier, string tx)
+        {
+            var request = new RestRequest($"/payments/{identifier}/complete");
+            request.AddHeader("Accept", $"application/json");
+            request.AddHeader("Authorization", $"Key {_apiKey}");
+            var txid = new Tx() { TxId = tx };
+            request.AddJsonBody(JsonConvert.SerializeObject(txid));
+            request.Method = Method.Post;
+            var response = await _restClient.ExecuteAsync(request);
+            if (response.IsSuccessful)
+            {
+                return JsonConvert.DeserializeObject<PaymentDto>(response.Content);
+            }
+            else
+            {
+                try
+                {
+                    PiNetworkError error = JsonConvert.DeserializeObject<PiNetworkError>(response.Content);
+                    if (error != null)
+                    {
+                        throw new PiNetworkException()
+                        {
+                            PiError = error,
+                        };
+                    }
+                    else
+                    {
+                        throw new Exception($"{response.Content}");
+                    }
+                }
+                catch
+                {
+                    throw;
+                }
+            }
+        }
+
 
         protected async Task<Server> GetServerAsync(string network)
         {
@@ -171,8 +328,9 @@ namespace PiNetworkNet
         {
             //Set network and server
             Server server = await GetServerAsync(network);
-
             KeyPair keypair;
+
+            //Generate a keypair from the account id.
             try
             {
                 if (account.StartsWith("S"))
@@ -188,7 +346,6 @@ namespace PiNetworkNet
             {
                 return 0.0;
             }
-            //Generate a keypair from the account id.
 
             //Load the account
             AccountResponse accountResponse = await server.Accounts.Account(keypair.AccountId);
@@ -234,11 +391,27 @@ namespace PiNetworkNet
             //Create asset object with specific amount
             //You can use native or non native ones.
             Asset asset = new AssetTypeNative();
-            string amount = $"{data.Amount}";
+            double balance = 0.0;
+            for (int i = 0; i < sourceAccountResponse.Balances.Length; i++)
+            {
+                Balance ast = sourceAccountResponse.Balances[i];
+                if (ast.AssetType == "native")
+                {
+                    if (double.TryParse(ast.BalanceString, out balance))
+                        break;
+                }
+            }
+            if (balance < data.Amount + 0.01)
+            {
+                throw new Exception($"Not enough balance ({balance})");
+            }
+            string amount = $"{Math.Floor(data.Amount * 10000000.0)/ 10000000.0:F7}";
             try
             {
                 //Create payment operation
-                PaymentOperation operation = new PaymentOperation.Builder(destinationKeyPair, asset, amount).SetSourceAccount(sourceAccount.KeyPair).Build();
+                PaymentOperation operation = new PaymentOperation.Builder(destinationKeyPair, asset, amount)
+                                                    .SetSourceAccount(sourceAccount.KeyPair)
+                                                    .Build();
 
                 var Identifier = string.IsNullOrEmpty(data.Identifier) ? $"" : $"{data.Identifier.Trim()}";
                 MemoText memo = new MemoText(string.IsNullOrEmpty(Identifier) ? $"" : Identifier.Substring(0, Math.Min(Identifier.Length, 28)));
@@ -260,7 +433,7 @@ namespace PiNetworkNet
             {
                 Console.WriteLine("Send Transaction Failed");
                 Console.WriteLine("Exception: " + exception.Message);
-                return null;
+                throw;
             }
         }
     }

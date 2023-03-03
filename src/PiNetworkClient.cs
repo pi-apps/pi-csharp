@@ -16,7 +16,7 @@ namespace PiNetworkNet
         public PiNetworkClient(string apiKey)
         {
             _restClient.AddDefaultHeader("Content-Type", "application/json");
-            _restClient.AddDefaultHeader("Accept", "application/json");
+            //_restClient.AddDefaultHeader("Accept", "application/json");
             _apiKey = apiKey;
         }
 
@@ -50,7 +50,7 @@ namespace PiNetworkNet
                 }
                 catch
                 {
-                    throw;
+                    throw new Exception($"{response.Content}");
                 }
             }
         }
@@ -87,7 +87,7 @@ namespace PiNetworkNet
                     }
                     catch
                     {
-                        throw;
+                        throw new Exception($"{response.Content}");
                     }
                 }
             }
@@ -128,7 +128,7 @@ namespace PiNetworkNet
                     }
                     catch
                     {
-                        throw;
+                        throw new Exception($"{response.Content}");
                     }
                 }
             }
@@ -179,7 +179,7 @@ namespace PiNetworkNet
                     }
                     catch
                     {
-                        throw;
+                        throw new Exception($"{response.Content}");
                     }
                 }
             }
@@ -221,7 +221,7 @@ namespace PiNetworkNet
                     }
                     catch
                     {
-                        throw;
+                        throw new Exception($"{response.Content}");
                     }
                 }
             }
@@ -260,7 +260,7 @@ namespace PiNetworkNet
                     }
                     catch
                     {
-                        throw;
+                        throw new Exception($"{response.Content}");
                     }
                 }
             }
@@ -299,7 +299,7 @@ namespace PiNetworkNet
                 }
                 catch
                 {
-                    throw;
+                    throw new Exception($"{response.Content}");
                 }
             }
         }
